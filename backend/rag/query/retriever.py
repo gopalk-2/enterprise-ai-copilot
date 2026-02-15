@@ -8,7 +8,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 PERSIST_DIR = os.path.join(current_dir, "../../data/embeddings")
 
 
-def get_retriever():
+def get_retriever(role="employee"):
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -18,4 +18,9 @@ def get_retriever():
         embedding_function=embeddings
     )
 
-    return vectordb.as_retriever(search_kwargs={"k": 3})
+    return vectordb.as_retriever(
+        search_kwargs={
+            "k": 3,
+            "filter": {"access_role": role}
+        }
+    )

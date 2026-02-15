@@ -30,12 +30,15 @@ def load_documents():
         path = os.path.join(DATA_PATH, file)
 
         if file.endswith(".pdf"):
-            docs.append(load_pdf(path))
-
+            text=load_pdf(path)
         elif file.endswith(".docx"):
-            docs.append(load_docx(path))
-
+            text=load_docx(path)
         elif file.endswith(".txt"):
-            docs.append(load_txt(path))
+            text=load_txt(path)
+        else:
+            continue
+        metadata={"source":file,"department":"finance" if "finance" in file else "general","access_role": "admin" if "confidential" in file else "employee"}
+        docs.append({"text": text,"metadata": metadata})
+
 
     return docs
