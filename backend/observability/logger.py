@@ -1,7 +1,7 @@
 import logging
 import os
 
-LOG_PATH = "../../data/logs"
+LOG_PATH = "/Users/gopalkumar/Desktop/enterprise-ai-assistant/data/logs"
 
 os.makedirs(LOG_PATH, exist_ok=True)
 
