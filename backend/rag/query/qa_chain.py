@@ -1,6 +1,5 @@
 from langchain_community.llms import Ollama 
 from langchain_classic.chains import RetrievalQA
-
 from .retriever import get_retriever
 
 
