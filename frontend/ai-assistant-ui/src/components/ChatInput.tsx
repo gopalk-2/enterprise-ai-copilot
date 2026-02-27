@@ -12,7 +12,7 @@ export default function ChatInput({ onSend }: any) {
   };
 
   return (
-    <div className="flex gap-2 p-4 border-t">
+    <div className="flex gap-2 p-4">
       <input
         className="flex-1 border rounded px-3 py-2"
         value={message}
