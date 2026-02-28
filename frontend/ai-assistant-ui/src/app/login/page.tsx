@@ -32,7 +32,7 @@ export default function Login() {
       <div className="p-10 bg-white border border-slate-200 shadow-2xl rounded-3xl w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-block p-4 bg-blue-50 rounded-2xl mb-4">
-            <span className="text-3xl">🚀</span>
+            <span className="text-3xl"></span>
           </div>
           <h2 className="text-3xl font-extrabold text-slate-800">Welcome Back</h2>
           <p className="text-slate-500 mt-2">Sign in to your AI workspace</p>
