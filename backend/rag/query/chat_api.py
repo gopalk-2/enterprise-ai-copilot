@@ -13,61 +13,84 @@ from memory.session_memory import (
     add_message,
     get_conversation
 )
+from utils.query_classifier import is_greeting
 import time
 
 router = APIRouter()
 
+
 class QueryRequest(BaseModel):
     query: str
+
 
 @router.post("/chat")
 def chat(request: QueryRequest, user=Depends(get_current_user)):
     start_time = time.time()
+
     username = user["sub"]
     role = user["role"]
-    
-    try:
-        # 1. Audit: Log the incoming raw query
-        log_query(username, request.query)
+    query = request.query
 
-        # 2. Memory: Retrieve past conversation history
+    try:
+
+        # 1️⃣ Log incoming query
+        log_query(username, query)
+
+        # 2️⃣ Greeting Shortcut (skip AI pipeline)
+        if is_greeting(query):
+            response_text = "Hello! How can I help you today?"
+
+            add_message(username, "user", query)
+            add_message(username, "assistant", response_text)
+
+            log_response(username, response_text)
+            measure_time(start_time)
+
+            return {"answer": response_text}
+
+        # 3️⃣ Retrieve conversation history
         history = get_conversation(username)
 
-        # 3. Contextualization: Build the full conversation string
-        # This allows the AI to understand follow-up questions
+        # 4️⃣ Build contextual conversation for RAG
         contextual_query = ""
+
         for msg in history:
             contextual_query += f"{msg['role']}: {msg['content']}\n"
-        
-        contextual_query += f"user: {request.query}"
 
-        # 4. Agent Execution: Attempt tool-calling with context
+        contextual_query += f"user: {query}"
+
+        # 5️⃣ Try Agent Tool Execution
         agent = get_tool_agent()
+
         try:
-            # Passing the full context so the agent can reference previous turns
-            agent_response = agent.run(contextual_query)
+            # Agent should only get the user query
+            agent_response = agent.run(query)
+
             if agent_response:
-                # Store the successful interaction in memory
-                add_message(username, "user", request.query)
+                add_message(username, "user", query)
                 add_message(username, "assistant", agent_response)
-                
+
                 log_response(username, agent_response)
                 measure_time(start_time)
+
                 return {"agent_response": agent_response}
+
         except Exception:
-            # Fallback to standard RAG if the agent fails or isn't needed
+            # If agent fails → fallback to RAG
             pass
 
-        # 5. RAG Execution: Use QA Chain with the contextualized prompt
+        # 6️⃣ RAG Knowledge Retrieval
         qa_chain = get_qa_chain(role)
+
         response = qa_chain(contextual_query)
+
         answer = response["result"]
 
-        # 6. Memory: Update history with the new exchange
-        add_message(username, "user", request.query)
+        # 7️⃣ Update memory
+        add_message(username, "user", query)
         add_message(username, "assistant", answer)
 
-        # 7. Audit: Log final outcome and measure performance
+        # 8️⃣ Audit logging
         log_response(username, answer)
         measure_time(start_time)
 
@@ -81,6 +104,7 @@ def chat(request: QueryRequest, user=Depends(get_current_user)):
         }
 
     except Exception as e:
-        # Log failure for system debugging
+
+        # System error logging
         log_error(username, str(e))
         raise
