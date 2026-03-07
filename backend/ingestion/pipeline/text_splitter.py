@@ -5,8 +5,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter # pyright: i
 
 def split_text(documents):
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100
+        chunk_size=800,
+        chunk_overlap=120
     )
     docs = [Document(page_content=d["text"], metadata=d["metadata"]) for d in documents]
 

@@ -4,7 +4,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware # Added this
 from rag.query.chat_api import router as chat_router
+from memory.sqlite_memory import init_db
 
+init_db()
 app = FastAPI(
     title="Enterprise AI Assistant",
     swagger_ui_parameters={"persistAuthorization": True}
