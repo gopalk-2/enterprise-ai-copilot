@@ -11,8 +11,8 @@ export default function ChatWindow() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) router.push("/login");
+    const isLoggedIn = localStorage.getItem("is_logged_in");
+    if (!isLoggedIn) router.push("/login");
   }, [router]);
 
   useEffect(() => {
@@ -25,39 +25,64 @@ export default function ChatWindow() {
     if (!msg.trim()) return;
     const token = localStorage.getItem("token");
 
-    const userMsg = { 
-      text: msg, 
-      user: true, 
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    const userMsg = {
+      text: msg,
+      user: true,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/chat", {
+      const res = await fetch("http://localhost:8000/chat/stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({ query: msg }),
+        credentials: "include",
       });
 
       if (res.status === 401) {
-        localStorage.removeItem("token");
+        localStorage.removeItem("is_logged_in");
         router.push("/login");
         return;
       }
 
-      const data = await res.json();
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessage = "";
+
+      // Add an initial empty assistant message to the state
       setMessages((prev) => [
         ...prev,
-        { 
-          text: data.answer || data.response || data.agent_response, 
+        {
+          text: "",
           user: false,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         },
       ]);
+
+      // Read the stream chunk by chunk
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        assistantMessage += chunk;
+
+        // Update the last message (the assistant's current response) with the appended chunk
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          newMessages[newMessages.length - 1] = {
+            ...newMessages[newMessages.length - 1],
+            text: assistantMessage,
+          };
+          return newMessages;
+        });
+      }
     } catch (error) {
       setMessages((prev) => [...prev, { text: "⚠️ Server connection lost.", user: false }]);
     } finally {
@@ -66,19 +91,20 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-full bg-white relative">
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative max-w-5xl mx-auto w-full border-x border-slate-100">
-        
+      <div className="flex-1 flex flex-col relative max-w-5xl mx-auto w-full border-x border-slate-100 shadow-[0_0_40px_-15px_rgba(0,0,0,0.05)]">
+
         {/* Production Header */}
         <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md px-8 py-5 flex justify-between items-center border-b border-slate-100">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 md:hidden">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">A</div>
             <h1 className="text-lg font-bold text-slate-800">Enterprise Assistant</h1>
           </div>
+          <div className="hidden md:block"></div> {/* Spacer for desktop since branding is in sidebar */}
           <button
-            onClick={() => { localStorage.removeItem("token"); router.push("/login"); }}
-            className="text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-wider"
+            onClick={() => { localStorage.removeItem("is_logged_in"); router.push("/login"); }}
+            className="text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-wider md:hidden"
           >
             Logout
           </button>
@@ -92,7 +118,7 @@ export default function ChatWindow() {
               <p className="text-slate-900 font-medium">Start a conversation with your data.</p>
             </div>
           )}
-          
+
           {messages.map((m, i) => (
             <MessageBubble key={i} text={m.text} isUser={m.user} time={m.time} />
           ))}

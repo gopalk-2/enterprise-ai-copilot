@@ -18,5 +18,5 @@ def create_token(username, role):
 def verify_token(token):
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except:
+    except jwt.JWTError:
         return None

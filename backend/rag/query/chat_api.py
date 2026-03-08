@@ -1,7 +1,8 @@
 from security.auth.dependencies import get_current_user
 from fastapi import Depends, APIRouter
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from .qa_chain import get_qa_chain
+from .qa_chain import get_qa_chain, stream_answer
 from agents.tool_calling.agent import get_tool_agent
 from utils.query_router import route_query
 from observability.audit_service import (
@@ -106,6 +107,65 @@ def chat(request: QueryRequest, user=Depends(get_current_user)):
                 doc.metadata for doc in response.get("source_documents", [])
             ]
         }
+
+    except Exception as e:
+        log_error(username, str(e))
+        raise
+@router.post("/chat/stream")
+def chat_stream(request: QueryRequest, user=Depends(get_current_user)):
+
+    username = user["sub"]
+    role = user["role"]
+    query = request.query
+
+    route = route_query(query)
+
+    try:
+        log_query(username, query)
+
+        # Greeting route
+        if route == "greeting":
+
+            def greeting_stream():
+                yield "Hello! How can I help you today?"
+
+            return StreamingResponse(greeting_stream(), media_type="text/plain")
+
+        # Agent route
+        if route == "agent":
+
+            agent = get_tool_agent()
+
+            try:
+                agent_response = agent.run(query)
+
+                def agent_stream():
+                    for char in agent_response:
+                        yield char
+
+                return StreamingResponse(agent_stream(), media_type="text/plain")
+
+            except Exception as e:
+                print(f"Agent failed: {e}")
+
+        # RAG STREAMING
+        def generator():
+
+            full_answer = ""
+
+            for token in stream_answer(role, query):
+
+                full_answer += token
+
+                yield token
+
+            # Save memory after stream completes
+            add_message(username, "user", query)
+            add_message(username, "assistant", full_answer)
+
+            log_response(username, full_answer)
+
+        return StreamingResponse(generator(), media_type="text/plain")
 
     except Exception as e:
         log_error(username, str(e))

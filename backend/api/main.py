@@ -1,8 +1,10 @@
 from security.auth.models import users_db
 from security.auth.auth_handler import create_token
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response, Depends
 from fastapi.security import HTTPBearer
-from fastapi.middleware.cors import CORSMiddleware # Added this
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import bcrypt
 from rag.query.chat_api import router as chat_router
 from memory.sqlite_memory import init_db
 
@@ -29,12 +31,25 @@ app.include_router(chat_router)
 def root():
     return {"status": "running"}
 
-@app.post("/login")
-def login(username: str, password: str):
-    user = users_db.get(username)
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
-    if not user or user["password"] != password:
+@app.post("/login")
+def login(request: LoginRequest, response: Response):
+    user = users_db.get(request.username)
+
+    if not user or not bcrypt.checkpw(request.password.encode('utf-8'), user["password"].encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_token(username, user["role"])
-    return {"access_token": token}
+    token = create_token(request.username, user["role"])
+    
+    # Store token in HttpOnly cookie
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        samesite="lax",
+        secure=False # Set True in production
+    )
+    return {"message": "Login successful"}

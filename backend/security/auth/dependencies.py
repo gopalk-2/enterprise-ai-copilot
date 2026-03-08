@@ -1,14 +1,17 @@
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request
 from .auth_handler import verify_token
 
-security = HTTPBearer()
+def get_current_user(request: Request):
+    token = request.cookies.get("access_token")
 
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ")[1]
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
-    token = credentials.credentials
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid authentication token")
+
     payload = verify_token(token)
 
     if not payload:

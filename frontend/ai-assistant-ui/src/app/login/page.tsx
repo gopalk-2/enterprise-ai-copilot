@@ -11,14 +11,23 @@ export default function Login() {
 
   const login = async () => {
     setLoading(true);
-    const url = `http://127.0.0.1:8000/login?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    const url = `http://localhost:8000/login`;
 
     try {
-      const res = await fetch(url, { method: "POST" });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ username, password }),
+        credentials: "include"
+      });
+
       if (!res.ok) throw new Error("Invalid credentials");
 
-      const data = await res.json();
-      localStorage.setItem("token", data.access_token);
+      // The backend will set the HttpOnly cookie for auth
+      // Set a flag in localStorage so UI knows user is logged in
+      localStorage.setItem("is_logged_in", "true");
       router.push("/");
     } catch (err) {
       alert("Login failed. Please check your username and password.");

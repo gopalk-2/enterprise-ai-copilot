@@ -1,7 +1,13 @@
+import os
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "data/chat_memory.db"
+# Calculate absolute path relative to this file
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Navigate up one level to backend, then into data
+DB_DIR = os.path.join(current_dir, "../../data")
+os.makedirs(DB_DIR, exist_ok=True)
+DB_PATH = os.path.join(DB_DIR, "chat_memory.db")
 
 
 def init_db():

@@ -1,13 +1,15 @@
 # New
-from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter # pyright: ignore[reportMissingImports]
 
-
-def split_text(documents):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800,
-        chunk_overlap=120
+def get_splitters():
+    parent_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2000,
+        chunk_overlap=200
     )
-    docs = [Document(page_content=d["text"], metadata=d["metadata"]) for d in documents]
+    
+    child_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=400,
+        chunk_overlap=50
+    )
 
-    return splitter.split_documents(docs)
+    return parent_splitter, child_splitter
