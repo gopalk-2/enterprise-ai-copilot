@@ -1,9 +1,9 @@
 from langchain.agents import create_agent
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 from .tools import generate_summary, send_email,fetch_subscriptions,start_approval_workflow
 
 def get_tool_agent():
-    llm = Ollama(model="mistral")
+    llm = OllamaLLM(model="mistral")
 
     tools = [
         generate_summary,

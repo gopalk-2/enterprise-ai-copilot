@@ -1,6 +1,6 @@
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 
-llm = Ollama(model="mistral", temperature=0)
+llm = OllamaLLM(model="mistral", temperature=0)
 
 
 def summarize_conversation(history):
