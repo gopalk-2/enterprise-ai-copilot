@@ -36,7 +36,7 @@ USER QUERY: {query}
 CATEGORY:"""
 )
 
-llm = OllamaLLM(model="mistral", temperature=0.0)
+llm = OllamaLLM(model="gemma4:31b-cloud", temperature=0.0)
 router_chain = router_prompt | llm | StrOutputParser()
 
 

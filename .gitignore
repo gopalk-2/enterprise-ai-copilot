@@ -4,3 +4,16 @@ data/
 __pycache__/
 node_modules/
 .next/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python cache
+*.pyc
+*.pyo
+*.pyd
+
+# Frontend dev-server artefacts
+frontend_pid.txt
+frontend_out.log

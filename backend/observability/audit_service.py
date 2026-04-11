@@ -17,3 +17,17 @@ def log_error(user, error):
 def measure_time(start_time):
     duration = time.time() - start_time
     logger.info(f"RESPONSE_TIME={duration:.2f}s")
+
+
+# ── Semantic Cache Observability ─────────────────────────────────────────────
+
+def log_cache_hit(user, query):
+    logger.info(f"USER={user} CACHE=HIT QUERY={query[:100]}")
+
+
+def log_cache_miss(user, query):
+    logger.info(f"USER={user} CACHE=MISS QUERY={query[:100]}")
+
+
+def log_redis_error(error):
+    logger.warning(f"REDIS_ERROR={error}")

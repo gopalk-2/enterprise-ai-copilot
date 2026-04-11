@@ -8,7 +8,7 @@ from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from .graph_store import run_cypher, is_available
 
-llm = OllamaLLM(model="mistral", temperature=0.0)
+llm = OllamaLLM(model="gemma4:31b-cloud", temperature=0.0)
 
 cypher_prompt = ChatPromptTemplate.from_template(
     """You are a Cypher query generator for a Neo4j knowledge graph about an enterprise.

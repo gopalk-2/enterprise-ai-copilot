@@ -24,7 +24,7 @@ class SupervisorState(TypedDict):
 
 
 # --- LLM ---
-llm = ChatOllama(model="mistral", temperature=0.0)
+llm = ChatOllama(model="gemma4:31b-cloud", temperature=0.0)
 
 
 # --- Supervisor Classifier ---

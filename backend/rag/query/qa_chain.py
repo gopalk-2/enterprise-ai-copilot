@@ -42,89 +42,109 @@ HYPOTHETICAL DOCUMENT:
 hyde_prompt = ChatPromptTemplate.from_template(hyde_template)
 
 
-# ---------------------------------------
-# NORMAL QA CHAIN (with Hybrid Retrieval)
-# ---------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# NORMAL QA CHAIN  (Semantic Cache → HyDE → Hybrid Retrieval → LLM)
+# ──────────────────────────────────────────────────────────────────────────────
 def get_qa_chain(role):
 
-    llm = OllamaLLM(model="mistral", temperature=0.0)
-
+    llm = OllamaLLM(model="gemma4:31b-cloud", temperature=0.0)
     retriever = get_retriever(role)
 
     def qa_chain(query):
-        
-        # 1. HyDE: Generate Hypothetical Document
+        from cache.semantic_cache import semantic_cache
+        from observability.audit_service import log_cache_hit, log_cache_miss
+
+        # ── 1. Semantic cache check ──────────────────────────────────────────
+        cached = semantic_cache.get(query)
+        if cached:
+            log_cache_hit("system", query)
+            return {
+                "result": cached["answer"],
+                "source_documents": [],
+                "cache_hit": True,
+            }
+
+        log_cache_miss("system", query)
+
+        # ── 2. HyDE: Generate Hypothetical Document ──────────────────────────
         formatted_hyde_prompt = hyde_prompt.format(question=query)
         hypothetical_doc = llm.invoke(formatted_hyde_prompt)
-        
-        # Combine the original query with the hallucinated document for maximum semantic overlap
+
+        # Combine the original query with the hallucinated document
         search_query = f"{query}\n\n{hypothetical_doc}"
 
-        # 2. Retrieve using the enriched query (Vector)
+        # ── 3. Retrieve ───────────────────────────────────────────────────────
         docs = retriever.invoke(search_query)
 
-        # 3. Rerank using the original query against the retrieved docs
+        # ── 4. Rerank ─────────────────────────────────────────────────────────
         reranked_docs = rerank(query, docs)
-
         top_docs = reranked_docs[:3]
-
         vector_context = "\n\n".join([doc.page_content for doc in top_docs])
 
-        # 4. Graph retrieval (optional enrichment)
+        # ── 5. Graph enrichment (optional) ────────────────────────────────────
         graph_context = ""
         try:
             from rag.knowledge_graph.graph_retriever import retrieve_from_graph
             graph_context = retrieve_from_graph(query)
         except Exception:
-            pass  # Graph not available, continue with vector-only
+            pass
 
-        # 5. Combine contexts
         context = vector_context
         if graph_context:
             context += f"\n\n--- Entity Relationships ---\n{graph_context}"
 
-        formatted_prompt = prompt.format(
-            context=context,
-            question=query
-        )
-
+        # ── 6. LLM answer ─────────────────────────────────────────────────────
+        formatted_prompt = prompt.format(context=context, question=query)
         answer = llm.invoke(formatted_prompt)
+
+        # ── 7. Populate cache ─────────────────────────────────────────────────
+        semantic_cache.set(query, answer, [doc.metadata for doc in top_docs])
 
         return {
             "result": answer,
-            "source_documents": top_docs
+            "source_documents": top_docs,
+            "cache_hit": False,
         }
 
     return qa_chain
 
 
-# ---------------------------------------
-# STREAMING QA FUNCTION (with Hybrid Retrieval)
-# ---------------------------------------
+# ──────────────────────────────────────────────────────────────────────────────
+# STREAMING QA FUNCTION  (Semantic Cache → HyDE → Hybrid Retrieval → LLM stream)
+# ──────────────────────────────────────────────────────────────────────────────
 def stream_answer(role, query):
+    from cache.semantic_cache import semantic_cache
+    from observability.audit_service import log_cache_hit, log_cache_miss
 
-    llm = OllamaLLM(model="mistral", temperature=0.0)
+    # ── 1. Semantic cache check ──────────────────────────────────────────────
+    cached = semantic_cache.get(query)
+    if cached:
+        log_cache_hit("system", query)
 
+        def cached_generator():
+            """Yield cached answer character-by-character to mimic streaming."""
+            for char in cached["answer"]:
+                yield char
+
+        return cached_generator(), [], True   # (generator, source_docs, cache_hit)
+
+    log_cache_miss("system", query)
+
+    llm = OllamaLLM(model="gemma4:31b-cloud", temperature=0.0)
     retriever = get_retriever(role)
 
-    # 1. HyDE: Generate Hypothetical Document
+    # ── 2. HyDE ───────────────────────────────────────────────────────────────
     formatted_hyde_prompt = hyde_prompt.format(question=query)
     hypothetical_doc = llm.invoke(formatted_hyde_prompt)
-    
-    # Combine the original query with the hallucinated document
     search_query = f"{query}\n\n{hypothetical_doc}"
 
-    # 2. Retrieve using the enriched query
+    # ── 3. Retrieve + Rerank ──────────────────────────────────────────────────
     docs = retriever.invoke(search_query)
-
-    # 3. Rerank using the original query
     reranked_docs = rerank(query, docs)
-
     top_docs = reranked_docs[:3]
-
     vector_context = "\n\n".join([doc.page_content for doc in top_docs])
 
-    # 4. Graph retrieval (optional enrichment)
+    # ── 4. Graph enrichment ───────────────────────────────────────────────────
     graph_context = ""
     try:
         from rag.knowledge_graph.graph_retriever import retrieve_from_graph
@@ -132,20 +152,23 @@ def stream_answer(role, query):
     except Exception:
         pass
 
-    # 5. Combine contexts
     context = vector_context
     if graph_context:
         context += f"\n\n--- Entity Relationships ---\n{graph_context}"
 
-    formatted_prompt = prompt.format(
-        context=context,
-        question=query
-    )
-
+    formatted_prompt = prompt.format(context=context, question=query)
     stream = llm.stream(formatted_prompt)
 
-    def string_generator():
-        for chunk in stream:
-            yield chunk if isinstance(chunk, str) else str(chunk)
+    # Accumulate full answer so we can populate the cache after streaming
+    accumulated: list[str] = []
 
-    return string_generator(), top_docs
+    def streaming_generator():
+        for chunk in stream:
+            token = chunk if isinstance(chunk, str) else str(chunk)
+            accumulated.append(token)
+            yield token
+        # ── 5. Populate cache once the stream is exhausted ────────────────────
+        full_answer = "".join(accumulated)
+        semantic_cache.set(query, full_answer, [doc.metadata for doc in top_docs])
+
+    return streaming_generator(), top_docs, False   # (generator, source_docs, cache_hit)
