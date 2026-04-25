@@ -6,9 +6,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import bcrypt
 from rag.query.chat_api import router as chat_router
+from api.eval_router import router as eval_router
 from memory.sqlite_memory import init_db
+from observability.tracing import init_tracing
 
 init_db()
+init_tracing()  # OpenTelemetry → Jaeger (graceful no-op if Jaeger is unavailable)
 app = FastAPI(
     title="Enterprise AI Assistant",
     swagger_ui_parameters={"persistAuthorization": True}
@@ -26,6 +29,7 @@ app.add_middleware(
 security = HTTPBearer()
 
 app.include_router(chat_router)
+app.include_router(eval_router)
 
 @app.get("/")
 def root():

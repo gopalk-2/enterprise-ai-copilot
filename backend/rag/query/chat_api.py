@@ -1,6 +1,7 @@
 import json
 import time
 from security.auth.dependencies import get_current_user
+from security.guardrails import run_guardrails
 from fastapi import Depends, APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from observability.audit_service import (
     log_cache_hit,
     log_cache_miss,
     measure_time,
+    log_route,
 )
 from memory.sqlite_memory import (
     add_message,
@@ -61,6 +63,19 @@ def chat(request: QueryRequest, user=Depends(get_current_user)):
 
     try:
         log_query(username, query)
+
+        # ── Guardrail pre-filter ──────────────────────────────────────────────
+        guard = run_guardrails(query, user=username)
+        if guard.blocked:
+            return {
+                "user":   username,
+                "role":   role,
+                "route":  "blocked",
+                "answer": f"⛔ Request blocked: {guard.block_reason}",
+                "sources": [],
+                "blocked": True,
+            }
+        query = guard.safe_query   # use PII-redacted version
 
         if len(query) > 1000:
             return {"answer": "Your query is too long. Please shorten it."}
@@ -119,6 +134,18 @@ def chat_stream(request: QueryRequest, user=Depends(get_current_user)):
     username = user["sub"]
     role = user["role"]
     query = request.query
+
+    # ── Guardrail pre-filter (runs before routing) ────────────────────────────
+    guard = run_guardrails(query, user=username)
+    if guard.blocked:
+        def blocked_stream():
+            yield _ndjson_line({
+                "type":    "status",
+                "content": f"⛔ Request blocked by security filter: {guard.block_reason}",
+            })
+            yield _ndjson_line({"type": "done"})
+        return StreamingResponse(blocked_stream(), media_type="application/x-ndjson")
+    query = guard.safe_query   # use PII-redacted version
 
     route_state = semantic_router({"query": query, "role": role})
     route = route_state.get("route", "rag")
