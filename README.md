@@ -7,7 +7,7 @@ This document serves as the definitive guide to the Enterprise AI Assistant's ar
 ## 1. System Visualization
 
 ### Conceptual Architecture
-![Architecture Visualization](./assets/architecture_viz.png)
+![Architecture Visualization](docs/assets/architecture_viz.png)
 *If the image above does not load, please refer to the Mermaid and ASCII diagrams below.*
 
 ### High-Level Path (Mermaid)
